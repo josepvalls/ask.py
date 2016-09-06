@@ -10,9 +10,13 @@ This is intended to work on AWS infrastructure. It uses ASK, Lambda and DynamoDB
 * Create a new lambda using the Python Alexa template. Select *edit code inline* and copy/paste the code from your single-file-template.py file.
 * Copy the ARN to the skill.
 * Create your Dynamodb table.
-* 
+
 ## What else is included?
 * A little utility to generate utterances given a grammar (with an example of my Audio Hangman and Audio Battleship skills).
 * An example on how to write unittests for your skills (with an example of my Audio Hangman skill).
 * An older but complete version of my Audio Hangman skill.
-* 
+
+# What I learned:
+* Use Amazon's intents but translate them to your actions. For example, I translate both StopIntent and CancelIntent to do_cancel. See get_service_translation_layer().
+* Use a finite state machine to keep track of what is going on and remap actions accordingly. For example, when the user is playing, do_cancel may prompt the user if they really want to exit. While in the exit prompt, do_cancel may go back to playing. See get_fst()
+* Serialize things in a portable way so you can store your state in either the Alexa session object, DynamoDB or somewhere else. A Python dictionary should work (and are stored nicely in a DynamoDB map), just remember to use strings as keys so it can be serialized to json easily. See my serialize() and unserialize() methods.
