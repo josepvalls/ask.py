@@ -220,8 +220,10 @@ class BaseModel(object):
         return BaseModel.STATE_DEFAULT
     def get_default_rule(self):
         return [BaseModel.TRANSITION_STATE_ANY,BaseModel.TRANSITION_ACTION_ANY,BaseModel.TRANSITION_ACTION_PASSTHROUGH,BaseModel.TRANSITION_OUTPUT_BY_ACTION]
+    def get_fst(self):
+        return []
     def do(self, command_name, args):
-        for rule in self.model_fst:
+        for rule in self.get_fst():
             if (rule[0]==self.state or rule[0]==self.TRANSITION_STATE_ANY) and \
                     (rule[1]==command_name or rule[1]==self.TRANSITION_ACTION_ANY):
                 break
@@ -294,7 +296,8 @@ class MYMODEL(BaseModel):
     model_title = "Audio Hangman"
     model_description = "Audio Hangman, train your brain!"
 
-    model_fst = [
+    def get_fst():
+        return [
         ['*', 'finish_session', 'finish_session', '*'],
         ['confirm_quit', 'do_quit', '*', '*'],
         ['*', 'do_quit', 'do_confirm_quit', 'confirm_quit'],
