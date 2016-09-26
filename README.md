@@ -5,11 +5,17 @@ Single file template, examples and utilities for creating Amazon Alexa's skills 
 Amazon provides pretty cool tutorials and examples but most of them are written in Node.js. I thought I'd share my findings with other developers who may prefer Python instead.
 
 ## How to get started?
+* In line 44, replace MYMODEL for your model class name. Tip: if you have a separate class for the tutorial, you can create and instance of your tutorial class.
+* Implement your skill by inheriting from BaseModel. See MYMODEL for an example. Tip: try to keep the text in separate functions/templates so you can reuse it or override in subclasses; I use this approach for the tutorial.
+* Start by defining the translation layer and finite state machine, see the examples provided in MYMODEL for get_service_translation_layer() and get_fst().
+
+## How to get it up and running?
 This is intended to work on AWS infrastructure. It uses ASK, Lambda and DynamoDB.
 * Setup your skill, when it comes to configuring the endpoint, go to Lambda.
 * Create a new lambda using the Python Alexa template. Select *edit code inline* and copy/paste the code from your single-file-template.py file.
 * Copy the ARN to the skill.
 * Create your Dynamodb table.
+
 
 ## What else is included?
 * A little utility to generate utterances given a grammar (with an example of my Audio Hangman and Audio Battleship skills).
