@@ -446,9 +446,10 @@ class Messages(BaseModel):
         self.secret = data.get('secret', 'potato')
 
     def finish_session(self):
+        self.state = 'reading'
         return BaseModel.finish_session(self)
 
-    def do_new(self):
+    def do_new(self, args=None):
         self.start_session()
         self.secret = self._get_secret()
         title = "Welcome to " + self.model_title
@@ -457,22 +458,23 @@ class Messages(BaseModel):
         self.finish_session()
         return self.response(title, response, card=self._get_card_instructions())
 
-    def do_confirm_new(self):
-        return self.response("Are you sure you want to reset your secret?")
+    def do_confirm_new(self, args=None):
+        return self.response("Reset","Are you sure you want to reset your secret?")
 
-    def do_ok(self):
+    def do_ok(self, args=None):
         self.finish_session()
-        return self.response("Ok.")
+        return self.response("Ok","Ok.")
 
-    def do_read(self):
+    def do_read(self, args=None):
         messages, expired, remaining = self.pop_messages(APP_MAX_ITEMS)
         resp_ssml = self._format_messages(messages, expired, remaining)
         resp_card = self._format_messages(messages, expired, remaining, False, True)
         self.running = False
         return self.response("Your messages", resp_ssml, ssml=resp_ssml, card=resp_card)
-    def do_help(self):
+    def do_help(self, args=None):
         help = "This skill reads messages from your personal message board. You can use a variety of third-party services to easily post messages to your personal message board."
         help += " If you need to reset your secret, say: Alexa, ask " + self.model_title + " to reset my secret."
+        self.running = False
         return self.response("Help", help + " Check your Alexa app for more information.",
                              card=self._get_card_instructions())
     def pop_messages(self, limit = 0):
