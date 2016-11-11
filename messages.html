@@ -78,9 +78,10 @@
             });
             $('#cmd_hash').click(function(){
                 var secret = $('#util_secret').val().trim();
-                var hash = md5(":" + secret);
-                var query = { timestamp: "", hash: hash, source: 'api' };
-                $("#utils-output").append("<pre>" + JSON.stringify(query) + "\n<pre>");
+                var timestamp = $('#util_timestamp').val().trim();
+                var hash = md5(timestamp + ":" + secret);
+                var query = { timestamp: timestamp, hash: hash, source: 'api' };
+                $("#utils-output").prepend("<pre>" + JSON.stringify(query) + "\n<pre>");
             });
         });
 
@@ -165,8 +166,9 @@
     <div class="content">
         <h1>Utilities</h1>
     </div>
-    <p>If for some reason you cannot compute MD5 hashes, currently (may change at any time), you can just send an empty timestamp. Use this to compute the required hash given your secret.</p>
+    <p>If for some reason you cannot compute MD5 hashes, currently (may change at any time), you can just send an empty timestamp. Use this to compute the required hash given your secret for an empty or any arbitrary timestamp.</p>
     <div id="utils-input">
+        <div><label>Timestamp</label><input type="text" name="util_timestamp" id="util_timestamp" value="" size=70/></div>
         <div><label>Secret</label><input type="text" name="util_secret" id="util_secret" value="aBcDeFgHiJkLmNoPqRsT" size=70/></div>
         <div><button id="cmd_hash" style="font-size: 140%; width: 20em">Compute Hash</button></div>
     </div>
