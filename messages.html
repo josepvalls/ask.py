@@ -1,0 +1,175 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Testing Console</title>
+
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.4.0/js/md5.min.js"></script>
+
+    <script type="text/javascript">
+        function storageAvailable(type) {
+            try {
+                var storage = window[type],
+                    x = '__storage_test__';
+                storage.setItem(x, x);
+                storage.removeItem(x);
+                return true;
+            }
+            catch(e) {
+                return false;
+            }
+        }
+        jQuery(document).ready(function(){
+            if (storageAvailable('localStorage')) {
+                $('#text_text').val(localStorage.getItem('text_text'));
+                $('#text_id').val(localStorage.getItem('text_id'));
+                $('#text_secret').val(localStorage.getItem('text_secret'));
+                $('#cmd_save').click(function() {
+                    localStorage.setItem('text_text', $('#text_text').val().trim());
+                    localStorage.setItem('text_id', $('#text_id').val().trim());
+                    localStorage.setItem('text_secret', $('#text_secret').val().trim());
+                });
+                $('#cmd_clear').click(function(){
+                    localStorage.clear()
+                });
+            } else {
+                $('#cmd_save').prop( "disabled", true);
+                $('#cmd_clear').prop( "disabled", true);
+            }
+            $('#cmd_send').click(function(){
+                var text = $('#text_text').val().trim();
+                var userId = $('#text_id').val().trim();
+                var secret = $('#text_secret').val().trim();
+                var sticky = parseInt($('#text_sticky').val().trim());
+                var expiry = parseInt($('#text_expiry').val().trim());
+                var key = $('#text_key').val().trim();
+                var timestamp = Math.floor(Date.now() / 1000);
+                var hash = md5(timestamp + ":" + secret);
+                var query = { text: text, userId: userId, timestamp: timestamp, hash: hash, source: 'api', sticky: sticky, expiry: expiry, key: key };
+                if(text){
+                    $("#output").append("<pre>Request:\n" + JSON.stringify(query) + "\n<pre>");
+                    $.ajax({
+                            type:"POST",
+                            url: "https://l7kjk6dx49.execute-api.us-east-1.amazonaws.com/prod/postedmessage",
+                            data: JSON.stringify(query),
+                            dataType: "json",
+                            contentType: 'application/json; charset=utf-8',
+                            success: function(msg) {
+                                if(msg['messages']){
+                                    $("#output").append("<span class=\"ok\">There are: "+msg["messages"].length+" messages on the message board.</span>");
+                                } else if (msg['error']) {
+                                    $("#output").append("<span class=\"error\">There was an error: "+msg["error"]+".</span>");
+                                    if(msg["error"].indexOf("wrong hash") !== -1){
+                                        $("#output").append(" <span class=\"error\">Check your userId and secret.</span>");
+                                    }
+                                } else {
+                                    $("#output").append("<span class=\"error\">Unknown response</span>");
+                                }
+                                $("#output").append("<pre>Response:\n" + JSON.stringify(msg) + "\n<pre>");
+                            },
+                            error: function(jqXHR, textStatus, errorThrown) {
+                                $("#output").append("<span class=\"error\"'>Error contacting the API</span><pre>" + textStatus + " "+errorThrown+"<pre>");
+                            },
+                    });
+
+                }
+            });
+            $('#cmd_hash').click(function(){
+                var secret = $('#util_secret').val().trim();
+                var hash = md5(":" + secret);
+                var query = { timestamp: "", hash: hash, source: 'api' };
+                $("#utils-output").append("<pre>" + JSON.stringify(query) + "\n<pre>");
+            });
+        });
+
+
+
+
+    </script>
+    <style type="text/css">
+        #output {height: 20em; overflow: scroll; width: 60em; background-color: beige}
+        #console {display: inline-block;}
+        label {font-size: 90%; display: block; float: left; width: 10em}
+        span.ok {background-color: aquamarine}
+        span.error {background-color: indianred}
+    </style>
+</head>
+<body>
+<div id="header">
+    <div>Posted Messages<div>
+</div>
+<div id="console">
+    <div class="content">
+        <h1>Testing Console</h1>
+    </div>
+
+    <div id="output">
+        <pre>Fill in your account details and click "Post". Refer to the Alexa app for more info.</pre>
+    </div>
+
+    <fieldset class="input required">
+        <legend>Required</legend>
+        <div><label>Text</label><input type="text" name="text_text" id="text_text" value="This is a message in your message board." size=70/></div>
+        <div><label>User Id</label><input type="text" name="text_id" id="text_id" value="amzn1.ask.account...." size=70/></div>
+        <div><label>Secret</label><input type="text" name="text_secret" id="text_secret" value="aBcDeFgHiJkLmNoPqRsT" size=70/></div>
+    </fieldset>
+    <fieldset class="input optional">
+        <legend>Optional</legend>
+        <div><label>Key</label><input type="text" name="text_key" id="text_key" value="" size=20/></div>
+        <div><label>Expiry</label><input type="text" name="text_expiry" id="text_expiry" value="" size=20/> <button onclick="document.getElementById('text_expiry').value = Math.floor(Date.now() / 1000) + 60*60*24 - (new Date()).getTimezoneOffset();" >tomorrow</button> </div>
+        <div><label>Sticky</label><input type="text" name="text_sticky" id="text_sticky" value="" size=20/> <button onclick="document.getElementById('text_sticky').value = Math.floor(Date.now() / 1000) + 60*60*24 - (new Date()).getTimezoneOffset();" >tomorrow</button> </div>
+    </fieldset>
+    <fieldset class="input buttons">
+        <legend>Actions</legend>
+        <div><button id="cmd_send" style="font-size: 140%; width: 20em">Post</button></div>
+        <div><button id="cmd_save">Save User Id and Secret</button> <button id="cmd_clear">Clear Saved User Id and Secret</button></div>
+    </fieldset>
+</div>
+<div id="utils">
+    <div class="content">
+        <h1>Reference</h1>
+        <p>Use this endpoint: <a href="https://l7kjk6dx49.execute-api.us-east-1.amazonaws.com/prod/postedmessage">https://l7kjk6dx49.execute-api.us-east-1.amazonaws.com/prod/postedmessage</a></p>
+        <p>The endpoint expects a POST with a JSON payload with the following structure:</p>
+        <pre>
+{
+            text: "string: the message contents, currently limited to 200 characters",
+            userId: "string: your user id",
+            timestamp: "empty string or int",
+            hash: "string: hex digest of (timestamp + ':' + secret),
+            source: 'api',
+            sticky: int UTC timestamp in seconds (optional),
+            expiry: int UTC timestamp in seconds (optional),
+            key: "string: optional"
+}
+        </pre>
+        <dl>
+            <dt>userId</dt>
+            <dd>This is the identified used by ASK. See the Alexa app when enabling the skill if you don't know it.</dd>
+            <dt>hash</dt>
+            <dd>This is still work in progress. If you decide to include a timestamp, then you need to compute an MD5 hash of the concatenation of timestamp + ':' + secret, otherwise, provide always an empty timestamp and use the utility below to compute a hash</dd>
+            <dt>sticky</dt>
+            <dd>The current skill will delete messages from your board after they are read. If you want a message to be kept in the board for longer, provide a UTC timestamp and the message will be kept until then</dd>
+            <dt>expiry</dt>
+            <dd>The messages are always read in the order they are received. If you want a message to be discarded after some date, provide a UTC timestamp and it will not be included after that date</dd>
+            <dt>key</dt>
+            <dd>Messages are always queued unless you want to actually replace an existing message. You can assign keys to messages and any upcoming message with a key matching an existing message will replace it.</dd>
+        </dl>
+        <p>Note that you can open you Alexa app from your browser at <a href="http://alexa.amazon.com">http://alexa.amazon.com</a> where you can easily copy and paste your secret and userId</p>
+        <p>In my setup I have two temperature monitors with two different keys that send an update every hour. Using two different keys and having a sticky for one hour means that I will always get and I will only get the two more recent readings.</p>
+        <p>If you do a GET to the endpoint you will get a the feed for the flash briefing of my tests</p>
+
+
+    </div>
+    <div class="content">
+        <h1>Utilities</h1>
+    </div>
+    <p>If for some reason you cannot compute MD5 hashes, currently (may change at any time), you can just send an empty timestamp. Use this to compute the required hash given your secret.</p>
+    <div id="utils-input">
+        <div><label>Secret</label><input type="text" name="util_secret" id="util_secret" value="aBcDeFgHiJkLmNoPqRsT" size=70/></div>
+        <div><button id="cmd_hash" style="font-size: 140%; width: 20em">Compute Hash</button></div>
+    </div>
+    <div id="utils-output"></div>
+</body>
+</html>
