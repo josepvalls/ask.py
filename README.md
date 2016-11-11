@@ -21,13 +21,13 @@ This is intended to work on AWS infrastructure. It uses ASK, Lambda and DynamoDB
 * A little utility to generate utterances given a grammar (with an example of my Audio Hangman and Audio Battleship skills).
 * An example on how to write unittests for your skills (with an example of my Audio Hangman skill).
 * An older but complete version of my Audio Hangman skill.
+* A message board skill that I am currently developing (in the messages.html and messages_v1.py files), please find more information here: https://www.hackster.io/josep-valls/alexa-message-board-324b84 and the demo and reference here: https://s3.amazonaws.com/aws-website-textconsole-a3cnv/messages.html
 
 # What I did:
 Check my skills, all based on this template:
 * Audio Hangman: http://alexa.amazon.com/spa/index.html#skills/dp/B01KKZ5TP0/?ref=skill_dsk_skb_sr_0
 * Audio Battleship: http://alexa.amazon.com/spa/index.html#skills/dp/B01KJ91K5U/?ref=skill_dsk_skb_sr_0
 * Naughty Dice: http://alexa.amazon.com/spa/index.html#skills/dp/B01KWW0XEI/?ref=skill_dsk_skb_sr_0
-
 
 # What I learned:
 * Use Amazon's intents but translate them to your actions. For example, I translate both StopIntent and CancelIntent to do_cancel. See get_service_translation_layer().
