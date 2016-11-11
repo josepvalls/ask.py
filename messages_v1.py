@@ -68,7 +68,7 @@ def handler_feed():
         for i,message in enumerate(messages):
             item = {}
             item['uid'] = hashlib.md5(FEED_USER_ID+message.text+str(i)).hexdigest()
-            item['updateDate'] = datetime.datetime.fromtimestamp(message.posted).strftime("%y-%m-%d'T'%H:%M:%S'.0Z'")
+            item['updateDate'] = datetime.datetime.fromtimestamp(message.posted).strftime("%y-%m-%dT%H:%M:%S.0Z")
             item['titleText'] = "Message #%d" % (i+1)
             item['mainText'] = message.text
             feed.append(item)
@@ -82,12 +82,12 @@ def handler_feed():
                 status += "There were %d expired messages." % expired
             feed.append(
                 {'uid':hashlib.md5(FEED_USER_ID+str(time.time())).hexdigest(),
-                'updateDate':datetime.datetime.fromtimestamp(int(time.time())).strftime("%y-%m-%d'T'%H:%M:%S'.0Z'"),
+                'updateDate':datetime.datetime.fromtimestamp(int(time.time())).strftime("%y-%m-%dT%H:%M:%S.0Z"),
                 'titleText':"Additional messages",
                 'mainText':status})
     else:
         feed = {'uid':'empty',
-                'updateDate':datetime.datetime.fromtimestamp(int(time.time())).strftime("%y-%m-%d'T'%H:%M:%S'.0Z'"),
+                'updateDate':datetime.datetime.fromtimestamp(int(time.time())).strftime("%y-%m-%dT%H:%M:%S.0Z"),
                 'titleText':"No messages",
                 'mainText':"There are no messages in your message board."}
     return feed
