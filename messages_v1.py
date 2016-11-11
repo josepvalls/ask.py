@@ -14,13 +14,14 @@ ALWAYS_PERSIST = True
 ENVIRONMENT_MODELS = {}
 RELOAD_ENVIRONMENT_MODELS = True
 ALLOWED_APPLICATIONS = [
-    'amzn1.ask.skill.XXX',
+    'amzn1.ask.skill.ed472769-193c-464a-ab06-15aadc2fded6',
 ]
-FEED_USER_ID = 'amzn1.ask.account.XXX'
+FEED_USER_ID = 'amzn1.ask.account.AGLZF5TKU7KSKR6KTX6VZXZFA4OJJFVJNMEZZXBFWXOR355IWHR7EIZV4MGJKRLLCX7FMM6KSQYV5KAB4RPO6WOICVFDIRSP7PZFXGWY7GJMNWOGF5ALRMMTMIL3IJW3GQBABTSFIC4P5RYFQIJ2NKTGVLAY72YIGIQVMG6BTDYQF443FL6TEEX5GZRXCDOOD6VIZPOK7ZW3AQI'
 MESSAGE_MAX_LENGTH = 200 # truncate posted messages longer than this length
 FEED_MAX_ITEMS = 5 # the feed can have at most 5 items
 APP_MAX_ITEMS = 5 # the feed can have at most 5 items
 # https://developer.amazon.com/public/solutions/alexa/alexa-skills-kit/docs/flash-briefing-skill-api-feed-reference#json-message-examples
+
 
 def handler_api(event):
     client_id = event['userId']
@@ -40,6 +41,9 @@ def handler_api(event):
         event['error'] = "wrong hash"
         return event
     message = Message.from_event(event)
+    if not message:
+        event['error'] = "no message"
+        return event
     for i in xrange(len(model.messages)):
         if message.key and model.messages[i].key == message.key:
             model.messages[i] = message
@@ -394,10 +398,11 @@ class Messages(BaseModel):
 
     model_fst = [
         ['*', 'finish_session', 'finish_session', '*'],
-        ['confirm_quit', 'do_quit', '*', '*'],
-        ['*', 'do_quit', 'do_confirm_quit', 'confirm_quit'],
         ['*', 'do_read', 'do_read', '*'],
-        ['*', 'do_new', 'do_new', '*'],
+        ['*', 'do_new', 'do_confirm_new', 'confirm_new'],
+        ['confirm_new', 'do_yes', 'do_new', 'reading'],
+        ['confirm_new', 'do_no', 'do_ok', 'reading'],
+        ['confirm_new', 'do_cancel', 'do_ok', 'reading'],
         ['*', 'do_help', 'do_help', '*'],
         ['reading', 'do_cancel', 'finish_session', '*']
     ]
@@ -449,7 +454,15 @@ class Messages(BaseModel):
         title = "Welcome to " + self.model_title
         response = title + '. I sent instructions for posting messages and your secret token to your Alexa app.'
         self.state = 'reading'
+        self.finish_session()
         return self.response(title, response, card=self._get_card_instructions())
+
+    def do_confirm_new(self):
+        return self.response("Are you sure you want to reset your secret?")
+
+    def do_ok(self):
+        self.finish_session()
+        return self.response("Ok.")
 
     def do_read(self):
         messages, expired, remaining = self.pop_messages(APP_MAX_ITEMS)
@@ -548,6 +561,7 @@ class Message(object):
     def from_event(cls, message_data={}):
         message_data_ = {}
         message_data_['text'] = message_data.get('text','')[0:MESSAGE_MAX_LENGTH]
+        if not message_data_['text']: return None
         message_data_['key'] = message_data.get('key', '')[0:MESSAGE_MAX_LENGTH]
         try:
             message_data_['sticky'] = int(message_data.get('sticky'))
