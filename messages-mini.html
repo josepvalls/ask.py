@@ -1,0 +1,134 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Testing Console</title>
+
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.4.0/js/md5.min.js"></script>
+
+    <script type="text/javascript">
+        function storageAvailable(type) {
+            try {
+                var storage = window[type],
+                    x = '__storage_test__';
+                storage.setItem(x, x);
+                storage.removeItem(x);
+                return true;
+            }
+            catch(e) {
+                return false;
+            }
+        }
+        jQuery(document).ready(function(){
+            if (storageAvailable('localStorage')) {
+                $('#text_text').val(localStorage.getItem('text_text'));
+                $('#text_id').val(localStorage.getItem('text_id'));
+                $('#text_secret').val(localStorage.getItem('text_secret'));
+                $('#cmd_save').click(function() {
+                    localStorage.setItem('text_text', $('#text_text').val().trim());
+                    localStorage.setItem('text_id', $('#text_id').val().trim());
+                    localStorage.setItem('text_secret', $('#text_secret').val().trim());
+                });
+                $('#cmd_clear').click(function(){
+                    localStorage.clear()
+                });
+            } else {
+                $('#cmd_save').prop( "disabled", true);
+                $('#cmd_clear').prop( "disabled", true);
+            }
+            $('#cmd_send').click(function(){
+                if (storageAvailable('localStorage')) {
+                    localStorage.setItem('text_text', $('#text_text').val().trim());
+                    localStorage.setItem('text_id', $('#text_id').val().trim());
+                    localStorage.setItem('text_secret', $('#text_secret').val().trim());
+                }
+                var text = $('#text_text').val().trim();
+                var userId = $('#text_id').val().trim();
+                var secret = $('#text_secret').val().trim();
+                var sticky = parseInt($('#text_sticky').val().trim());
+                var expiry = parseInt($('#text_expiry').val().trim());
+                var key = $('#text_key').val().trim();
+                var timestamp = Math.floor(Date.now() / 1000);
+                var hash = md5(timestamp + ":" + secret);
+                var query = { text: text, userId: userId, timestamp: timestamp, hash: hash, source: 'api', sticky: sticky, expiry: expiry, key: key };
+                if(text){
+                    $.ajax({
+                            type:"POST",
+                            url: "https://l7kjk6dx49.execute-api.us-east-1.amazonaws.com/prod/postedmessage",
+                            data: JSON.stringify(query),
+                            dataType: "json",
+                            contentType: 'application/json; charset=utf-8',
+                            success: function(msg) {
+                                if(msg['messages']){
+                                    $("#output").html("<span class=\"ok\">Posted Ok. There are: "+msg["messages"].length+" messages on the message board.</span>");
+                                } else if (msg['error']) {
+                                    $("#output").html("<span class=\"error\">There was an error: "+msg["error"]+".</span>");
+                                    if(msg["error"].indexOf("wrong hash") !== -1){
+                                        $("#output").html(" <span class=\"error\">Check your userId and secret.</span>");
+                                    }
+                                } else {
+                                    $("#output").html("<span class=\"error\">Unknown response</span>");
+                                }
+                            },
+                            error: function(jqXHR, textStatus, errorThrown) {
+                                $("#output").html("<span class=\"error\"'>Error contacting the API</span><pre>" + textStatus + " "+errorThrown+"<pre>");
+                            },
+                    });
+
+                }
+            });
+            $('#cmd_hash').click(function(){
+                var secret = $('#util_secret').val().trim();
+                var timestamp = $('#util_timestamp').val().trim();
+                var hash = md5(timestamp + ":" + secret);
+                var query = { timestamp: timestamp, hash: hash, source: 'api' };
+                $("#utils-output").prepend("<pre>" + JSON.stringify(query) + "\n<pre>");
+            });
+        });
+
+
+
+
+    </script>
+    <style type="text/css">
+        label {font-size: 90%; display: block; float: left; width: 10em}
+        span.ok {background-color: aquamarine}
+        span.error {background-color: indianred}
+        fieldset.optional {display:none;}
+        button#cmd_save {display: none}
+        button#cmd_clear {display: none}
+        fieldset {border:0 none;}
+        fieldset legend {display: none;}
+    </style>
+</head>
+<body>
+<div id="header">
+    <h1>Posted Messages<h1>
+</div>
+<div id="console">
+    <fieldset class="input required">
+        <legend>Required</legend>
+        <div><label>Text</label><input type="text" name="text_text" id="text_text" value="This is a message in your message board." size=70/></div>
+        <div><label>User Id</label><input type="text" name="text_id" id="text_id" value="amzn1.ask.account...." size=70/></div>
+        <div><label>Secret</label><input type="text" name="text_secret" id="text_secret" value="aBcDeFgHiJkLmNoPqRsT" size=70/></div>
+    </fieldset>
+    <fieldset class="input optional">
+        <legend>Optional</legend>
+        <div><label>Key</label><input type="text" name="text_key" id="text_key" value="" size=20/></div>
+        <div><label>Expiry</label><input type="text" name="text_expiry" id="text_expiry" value="" size=20/> <button onclick="document.getElementById('text_expiry').value = Math.floor(Date.now() / 1000) + 60*60*24 - (new Date()).getTimezoneOffset();" >tomorrow</button> </div>
+        <div><label>Sticky</label><input type="text" name="text_sticky" id="text_sticky" value="" size=20/> <button onclick="document.getElementById('text_sticky').value = Math.floor(Date.now() / 1000) + 60*60*24 - (new Date()).getTimezoneOffset();" >tomorrow</button> </div>
+    </fieldset>
+    <fieldset class="input buttons">
+        <legend>Actions</legend>
+        <div><button id="cmd_send" style="font-size: 140%; width: 20em">Post</button></div>
+        <div><button id="cmd_save">Save User Id and Secret</button> <button id="cmd_clear">Clear Saved User Id and Secret</button></div>
+        <br/>
+        <div id="output">
+        </div>
+    </fieldset>
+
+</div>
+</body>
+</html>

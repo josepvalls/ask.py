@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
-import random, string, hashlib, time, datetime
+import random, string, hashlib, time, datetime, json
 
 try:
     import boto3
@@ -17,9 +17,11 @@ ALLOWED_APPLICATIONS = [
     'amzn1.ask.skill.ed472769-193c-464a-ab06-15aadc2fded6',
 ]
 FEED_USER_ID = 'amzn1.ask.account.AGLZF5TKU7KSKR6KTX6VZXZFA4OJJFVJNMEZZXBFWXOR355IWHR7EIZV4MGJKRLLCX7FMM6KSQYV5KAB4RPO6WOICVFDIRSP7PZFXGWY7GJMNWOGF5ALRMMTMIL3IJW3GQBABTSFIC4P5RYFQIJ2NKTGVLAY72YIGIQVMG6BTDYQF443FL6TEEX5GZRXCDOOD6VIZPOK7ZW3AQI'
-MESSAGE_MAX_LENGTH = 200 # truncate posted messages longer than this length
-FEED_MAX_ITEMS = 5 # the feed can have at most 5 items
-APP_MAX_ITEMS = 5 # the feed can have at most 5 items
+MESSAGE_MAX_LENGTH = 200  # truncate posted messages longer than this length
+FEED_MAX_ITEMS = 5  # the feed can have at most 5 items
+APP_MAX_ITEMS = 5  # the feed can have at most 5 items
+
+
 # https://developer.amazon.com/public/solutions/alexa/alexa-skills-kit/docs/flash-briefing-skill-api-feed-reference#json-message-examples
 
 
@@ -55,25 +57,26 @@ def handler_api(event):
     event['messages'] = document['model']['messages']
     return event
 
+
 def handler_feed():
     document = load_document(FEED_USER_ID)
     model_data = document['model'] if document and 'model' in document else {}
     model = unserialize(model_data)  # type: Messages
     total_messages = len(model.messages)
-    messages, expired, remaining = model.pop_messages(FEED_MAX_ITEMS -1)
+    messages, expired, remaining = model.pop_messages(FEED_MAX_ITEMS - 1)
     if messages:
         document = {'model': model.serialize()}
         persist_document(FEED_USER_ID, document)
         feed = []
-        for i,message in enumerate(messages):
+        for i, message in enumerate(messages):
             item = {}
-            item['uid'] = hashlib.md5(FEED_USER_ID+message.text+str(i)).hexdigest()
+            item['uid'] = hashlib.md5(FEED_USER_ID + message.text + str(i)).hexdigest()
             item['updateDate'] = datetime.datetime.fromtimestamp(message.posted).strftime("%y-%m-%dT%H:%M:%S.0Z")
-            item['titleText'] = "Message #%d" % (i+1)
+            item['titleText'] = "Message #%d" % (i + 1)
             item['mainText'] = message.text
             feed.append(item)
         if expired or remaining:
-            status =""
+            status = ""
             if remaining:
                 status += "There are %d remaining messages." % remaining
             if expired and remaining:
@@ -81,21 +84,46 @@ def handler_feed():
             if expired:
                 status += "There were %d expired messages." % expired
             feed.append(
-                {'uid':hashlib.md5(FEED_USER_ID+str(time.time())).hexdigest(),
-                'updateDate':datetime.datetime.fromtimestamp(int(time.time())).strftime("%y-%m-%dT%H:%M:%S.0Z"),
-                'titleText':"Additional messages",
-                'mainText':status})
+                {'uid': hashlib.md5(FEED_USER_ID + str(time.time())).hexdigest(),
+                 'updateDate': datetime.datetime.fromtimestamp(int(time.time())).strftime("%y-%m-%dT%H:%M:%S.0Z"),
+                 'titleText': "Additional messages",
+                 'mainText': status})
     else:
-        feed = {'uid':'empty',
-                'updateDate':datetime.datetime.fromtimestamp(int(time.time())).strftime("%y-%m-%dT%H:%M:%S.0Z"),
-                'titleText':"No messages",
-                'mainText':"There are no messages in your message board."}
+        feed = {'uid': 'empty',
+                'updateDate': datetime.datetime.fromtimestamp(int(time.time())).strftime("%y-%m-%dT%H:%M:%S.0Z"),
+                'titleText': "No messages",
+                'mainText': "There are no messages in your message board."}
     return feed
 
+
+def handler_integration_get(event):
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(handler_feed())
+    }
+
+
+def handler_integration_post(event):
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": "Ok, posted!"
+    }
+
+
 def lambda_handler(event, context):
-    log_event(event)
+    #print "EVENT", event
     if event and 'source' in event and event['source'] == 'api' and 'userId' in event:
         return handler_api(event)
+    if event and 'resource' in event and event[
+        'resource'] == '/postedmessage/slack' and 'requestContext' in event and 'httpMethod' in event[
+        'requestContext'] and event['requestContext']['httpMethod'] == 'GET':
+        return handler_integration_get(event)
+    if event and 'resource' in event and event[
+        'resource'] == '/postedmessage/slack' and 'requestContext' in event and 'httpMethod' in event[
+        'requestContext'] and event['requestContext']['httpMethod'] == 'POST':
+        return handler_integration_post(event)
     if not event or 'version' not in event or 'session' not in event or 'user' not in event['session']:
         return handler_feed()
     else:
@@ -123,7 +151,7 @@ def lambda_handler(event, context):
                 args = {}
             action = model.get_service_translation_layer('alexa').get(key, 'do_unknown_command')
             resp = model.do(action, [args])
-        if resp and resp.model and not resp.model.running or ALWAYS_PERSIST and resp or not resp:
+        if resp and resp.model and not resp.model.running or ALWAYS_PERSIST and resp and resp.model:
             document = {}
             document['model'] = resp.model.serialize()
             persist_document(client_id, document)
@@ -245,7 +273,8 @@ class AlexaResponse(object):
             "response": {
                 "outputSpeech": {
                     "type": "PlainText" if not self.ssml else "SSML",
-                    ("text" if not self.ssml else "ssml"): self.response if not self.ssml else ("<speak>" + self.ssml + "</speak>")
+                    ("text" if not self.ssml else "ssml"): self.response if not self.ssml else (
+                    "<speak>" + self.ssml + "</speak>")
                 },
                 "card": {
                     "type": "Simple",
@@ -398,13 +427,19 @@ class Messages(BaseModel):
 
     model_fst = [
         ['*', 'finish_session', 'finish_session', '*'],
-        ['*', 'do_read', 'do_read', '*'],
+        ['*', 'do_read', 'do_read', 'reading'],
         ['*', 'do_new', 'do_confirm_new', 'confirm_new'],
-        ['confirm_new', 'do_yes', 'do_new', 'reading'],
+        ['*', 'do_read_launch', 'do_read_launch', '*'],
+        ['confirm_new', 'do_yes', 'do_new', 'new'],
         ['confirm_new', 'do_no', 'do_ok', 'reading'],
-        ['confirm_new', 'do_cancel', 'do_ok', 'reading'],
-        ['*', 'do_help', 'do_help', '*'],
-        ['reading', 'do_cancel', 'finish_session', '*']
+        ['new', 'do_yes', 'do_help', 'reading'],
+        ['new', 'do_no', 'do_ok', 'reading'],
+        ['*', 'do_help', 'do_help', 'reading'],
+        ['*', 'do_purge', 'do_purge_confirm', 'purge'],
+        ['purge', 'do_purge', 'do_purge', 'reading'],
+        ['purge', 'do_yes', 'do_purge', 'reading'],
+        ['purge', 'do_no', 'do_ok', 'reading'],
+        ['reading', 'do_no', 'finish_session', '*']
     ]
 
     def get_default_state(self):
@@ -416,11 +451,12 @@ class Messages(BaseModel):
     def get_service_translation_layer(self, service):
         if service == 'alexa':
             return {
-                'LaunchRequest': 'do_read',
+                'LaunchRequest': 'do_read_launch',
                 'IntentRequest.ReadIntent': 'do_read',
                 'IntentRequest.NewIntent': 'do_new',
-                'IntentRequest.AMAZON.StopIntent': 'do_cancel',
-                'IntentRequest.AMAZON.CancelIntent': 'do_cancel',
+                'IntentRequest.PurgeIntent': 'do_purge',
+                'IntentRequest.AMAZON.StopIntent': 'do_no',
+                'IntentRequest.AMAZON.CancelIntent': 'do_no',
                 'IntentRequest.AMAZON.HelpIntent': 'do_help',
                 'IntentRequest.AMAZON.YesIntent': 'do_yes',
                 'IntentRequest.AMAZON.NoIntent': 'do_no',
@@ -453,31 +489,56 @@ class Messages(BaseModel):
         self.start_session()
         self.secret = self._get_secret()
         title = "Welcome to " + self.model_title
-        response = title + '. I sent instructions for posting messages and your secret token to your Alexa app.'
-        self.state = 'reading'
-        self.finish_session()
+        response = title + '. I sent instructions for posting messages and your secret token to your Alexa app. Do you want to hear additional information?'
+        self.state = 'new'
         return self.response(title, response, card=self._get_card_instructions())
 
+    def do_purge(self, args=None):
+        self.messages = []
+        return self.do_ok()
+
+    def do_purge_confirm(self, args=None):
+        return self.response("Reset", "Are you sure you want to delete your messages?")
+
     def do_confirm_new(self, args=None):
-        return self.response("Reset","Are you sure you want to reset your secret?")
+        return self.response("Reset", "Are you sure you want to reset your secret?")
 
     def do_ok(self, args=None):
         self.finish_session()
-        return self.response("Ok","Ok.")
+        return self.response("Ok", "Ok.")
+
+    def do_read_launch(self, args=None):
+        messages, expired, remaining = self.pop_messages(APP_MAX_ITEMS)
+        resp_ssml = resp_card = "Welcome to " + self.model_title + ".\n"
+        resp_ssml += self._format_messages(messages, expired, remaining)
+        resp_card += self._format_messages(messages, expired, remaining, False, True)
+        if not messages:
+            resp_ssml = resp_ssml.strip() + " If you need help posting messages try saying: Alexa, ask " + self.model_title + " for help."
+        else:
+            resp_ssml = resp_ssml.strip() + "<break strength=\"strong\"/>Next time, try saying: Alexa, ask " + self.model_title + " to read my messages."
+        self.finish_session()
+        self.state = 'reading'
+        return self.response(self.model_title, resp_ssml, ssml=resp_ssml, card=resp_card)
 
     def do_read(self, args=None):
         messages, expired, remaining = self.pop_messages(APP_MAX_ITEMS)
         resp_ssml = self._format_messages(messages, expired, remaining)
         resp_card = self._format_messages(messages, expired, remaining, False, True)
-        self.running = False
+        self.finish_session()
+        self.state = 'reading'
         return self.response("Your messages", resp_ssml, ssml=resp_ssml, card=resp_card)
+
     def do_help(self, args=None):
-        help = "This skill reads messages from your personal message board. You can use a variety of third-party services to easily post messages to your personal message board."
+        help = "This skill reads messages from your personal message board."
+        help += " You can post messages using our API from connected devices or web services."
+        help += " You can easily post messages using the console provided for demonstration purposes along with the documentation."
         help += " If you need to reset your secret, say: Alexa, ask " + self.model_title + " to reset my secret."
+        help += " If you have too many messages or if you want to get rid of your sticky messages, say: Alexa, ask " + self.model_title + " to delete all my messages."
         self.running = False
         return self.response("Help", help + " Check your Alexa app for more information.",
                              card=self._get_card_instructions())
-    def pop_messages(self, limit = 0):
+
+    def pop_messages(self, limit=0):
         timestamp = time.time()
         messages = [i for i in self.messages if i.expiry > timestamp or i.expiry <= 0]
         expired = len(self.messages) - len(messages)
@@ -496,7 +557,7 @@ class Messages(BaseModel):
                 if ssml: resp += '<break strength="strong"/>'
                 resp += m.text
                 if ssml: resp += '<break strength="x-strong"/>'
-                if card:
+                if False and card:
                     if m.sticky or m.key:
                         resp += " ("
                         if m.sticky > 0:
@@ -507,7 +568,8 @@ class Messages(BaseModel):
 
                 resp += '\n'
         if remaining:
-            resp += " There %s %s remaining." % ('is' if remaining==1 else 'are', self._format_plural(remaining, 'message', 'messages'))
+            resp += " There %s %s remaining." % (
+            'is' if remaining == 1 else 'are', self._format_plural(remaining, 'message', 'messages'))
         if expired:
             resp += " I also purged %s." % self._format_plural(expired, 'message', 'messages')
         return resp
@@ -544,25 +606,26 @@ class Messages(BaseModel):
         return ''.join(random.choice(string.ascii_letters + string.digits) for _ in xrange(n))
 
     def _get_card_instructions(self):
-        help = "Use the following url: %s\nWhen posting messages you will need your user identifier a secret to sign your messages.\nUser identifier: %s\nSecret: %s" % (
+        help = "Use the following API endpoint for posting messages from your devices and web services: %s\nWhen posting messages you will need your user identifier a secret to sign your messages.\nUser identifier: %s\nSecret: %s" % (
             "https://l7kjk6dx49.execute-api.us-east-1.amazonaws.com/prod/postedmessage",
             self.client_id,
             self.secret)
-        help += "\nFor more information on how to use the message posting API, please refer to: https://s3.amazonaws.com/aws-website-textconsole-a3cnv/messages.html"
+        help += "\nYou can choose to secure your messages but no other identification is required.\nFor more information on how to use the message posting API or use the message posting console, please visit: "
+        help += "https://s3.amazonaws.com/aws-website-textconsole-a3cnv/messages.html"
         return help
-
 
 class Message(object):
     def __init__(self, message_data={}):
         self.text = message_data.get('text', None)
-        self.posted = message_data.get('posted',int(time.time()))
+        self.posted = message_data.get('posted', int(time.time()))
         self.sticky = message_data.get('sticky', -1)
         self.expiry = message_data.get('expiry', -1)
         self.key = message_data.get('key', None) or None
+
     @classmethod
     def from_event(cls, message_data={}):
         message_data_ = {}
-        message_data_['text'] = message_data.get('text','')[0:MESSAGE_MAX_LENGTH]
+        message_data_['text'] = message_data.get('text', '')[0:MESSAGE_MAX_LENGTH]
         if not message_data_['text']: return None
         message_data_['key'] = message_data.get('key', '')[0:MESSAGE_MAX_LENGTH]
         try:
@@ -574,6 +637,7 @@ class Message(object):
         except:
             pass
         return cls(message_data_)
+
     def serialize(self):
         return {'text': self.text, 'sticky': self.sticky, 'expiry': self.expiry, 'key': self.key}
 
@@ -600,6 +664,10 @@ class TestLambda(unittest.TestCase):
         self.printResp(resp)
         resp = lambda_handler(testing_encode_intent_from_resp("AMAZON.HelpIntent", {}, resp), {})
         self.printResp(resp)
+        req = testing_encode_intent_from_resp("AMAZON.HelpIntent", {}, resp)
+        req['request']['type'] = 'SessionEndedRequest'
+        resp = lambda_handler(req, {})
+        self.printResp(resp)
 
     def assertInResp(self, text, resp):
         return resp and self.assertIn(text, resp['response']['outputSpeech']['text'].lower())
@@ -608,8 +676,11 @@ class TestLambda(unittest.TestCase):
         return resp and self.assertNotIn(text, resp['response']['outputSpeech']['text'].lower())
 
     def printResp(self, resp):
+        text = resp['response']['outputSpeech']['text'] if 'text' in resp['response']['outputSpeech'] else None
+        if not text:
+            text = resp['response']['outputSpeech']['ssml'] if 'ssml' in resp['response']['outputSpeech'] else None
         if resp:
-            print resp['response']['outputSpeech']['text']
+            print text
         else:
             "NONE"
 
@@ -627,7 +698,7 @@ def testing_encode_intent(intent, slots, session_attributes):
     return {
         "session": {
             "sessionId": "SessionId.4d96f5de-f93d-4132-9232-a773dbd6fe14",
-            "application": {"applicationId": "amzn1.ask.skill.3e7ce8c3-fe25-4b28-b1e7-f4b7525644f2"},
+            "application": {"applicationId": "amzn1.ask.skill.ed472769-193c-464a-ab06-15aadc2fded6"},
             "attributes": session_attributes,
             "user": {
                 "userId": "amzn1.ask.account.AFP3ZWPOS2BGJR7OWJZ3DHPKMOMB5JI2FGDWV7UINSNCWAAI52L6Z5A6LB7Z4PAFI7U6P74I4B4PPRK5QLNNTQCRC4NNTHIN5T5ACKUCSI6YWW6WV6SX25W5OUEUBU3ATOJNFUEGRSOIUSCP2GKBMK2CYVJRYJJD7KXKEAGJIIPIUFYLBP7BCZ4C4NRKLAHFXJVJSMYAWF6MO7A"},
@@ -649,34 +720,32 @@ def testing_encode_intent(intent, slots, session_attributes):
 
 def event1():
     return {
-        "session": {
-            "sessionId": "SessionId.ce10fbab-18a3-4403-8ad8-0b6f26be591d",
-            "application": {
-                "applicationId": "amzn1.ask.skill.18a84c1b-a040-4d8e-8586-412d32de921c"
-            },
-            "attributes": {},
-            "user": {
-                "userId": "amzn1.ask.account.AFP3ZWPOS2BGJR7OWJZ3DHPKMOMNOZ3RG3DSB3YBUM4OIRL2WYEXLIOTKTH7O2K5WSNA47XNUM2GDVGLXRNLIMDB2QWXKPHDMIHI3AOUQ6NBMMJS2JQ5MNT7THCPDKFE45HS56L7AKZ3KDAL5X2ZOLCIRPI5GYIK7JC6Y7A47KQHI7SRKPMLIZGYPYZU5L7VBWV3CCJTFYB4V7A"
-            },
-            "new": True
-        },
-        "request": {
-            "type": "IntentRequest",
-            "requestId": "EdwRequestId.1b12d832-9003-403a-8f17-2a3ebadfd29c",
-            "locale": "en-US",
-            "timestamp": "2016-08-25T01:31:29Z",
-            "intent": {
-                "name": "GuessIntent",
-                "slots": {
-                    "Letter": {
-                        "name": "Letter",
-                        "value": "x"
-                    }
-                }
-            }
-        },
-        "version": "1.0"
+  "session": {
+    "new": False,
+    "sessionId": "session1234",
+    "attributes": {},
+    "user": {
+      "userId": None
+    },
+    "application": {
+      "applicationId": "amzn1.ask.skill.ed472769-193c-464a-ab06-15aadc2fded6"
     }
+  },
+  "version": "1.0",
+  "request": {
+    "intent": {
+      "slots": {
+        "Color": {
+          "name": "Color",
+          "value": "blue"
+        }
+      },
+      "name": "MyColorIsIntent"
+    },
+    "type": "SessionEndedRequest",
+    "requestId": "request5678"
+  }
+}
 
 
 class UtteranceGenerator(object):
@@ -775,8 +844,9 @@ class UtteranceGenerator(object):
 def test_generator():
     d = {}
     g = [
-        'ReadIntent ((tell|read|say) (me|) (about|my|the|)) (posted|) (messages|)',
+        'ReadIntent ((tell|read|say|) (me|) (about|my|the|)) (posted|) (messages|)',
         'NewIntent (|do) (reset|re set|setup|set up|initialize|configure) ((my|the|) (settings|configuration|secret)|)',
+        'PurgeIntent (delete|remove|purge) (all|) (my|the|) messages',
     ]
     results = UtteranceGenerator().generate(g, d, verbose=False)
     for i in results:
