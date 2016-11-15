@@ -101,6 +101,7 @@
         button#cmd_clear {display: none}
         fieldset {border:0 none;}
         fieldset legend {display: none;}
+        div.hidden {display: none;}
     </style>
 </head>
 <body>
@@ -111,8 +112,8 @@
     <fieldset class="input required">
         <legend>Required</legend>
         <div><label>Text</label><input type="text" name="text_text" id="text_text" value="This is a message in your message board." size=70/></div>
-        <div><label>User Id</label><input type="text" name="text_id" id="text_id" value="amzn1.ask.account...." size=70/></div>
-        <div><label>Secret</label><input type="text" name="text_secret" id="text_secret" value="aBcDeFgHiJkLmNoPqRsT" size=70/></div>
+        <div class="hidden"><label>User Id</label><input type="text" name="text_id" id="text_id" value="amzn1.ask.account...." size=70/></div>
+        <div class="hidden"><label>Secret</label><input type="text" name="text_secret" id="text_secret" value="aBcDeFgHiJkLmNoPqRsT" size=70/></div>
     </fieldset>
     <fieldset class="input optional">
         <legend>Optional</legend>
