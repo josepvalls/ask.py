@@ -167,13 +167,21 @@
     </div>
     <div class="content">
         <h1>Utilities</h1>
+        <p>If for some reason you cannot compute MD5 hashes, currently (may change at any time), you can just send an empty timestamp. Use this to compute the required hash given your secret for an empty or any arbitrary timestamp.</p>
     </div>
-    <p>If for some reason you cannot compute MD5 hashes, currently (may change at any time), you can just send an empty timestamp. Use this to compute the required hash given your secret for an empty or any arbitrary timestamp.</p>
     <div id="utils-input">
         <div><label>Timestamp</label><input type="text" name="util_timestamp" id="util_timestamp" value="" size=70/></div>
         <div><label>Secret</label><input type="text" name="util_secret" id="util_secret" value="aBcDeFgHiJkLmNoPqRsT" size=70/></div>
         <div><button id="cmd_hash" style="font-size: 140%; width: 20em">Compute Hash</button></div>
     </div>
     <div id="utils-output"></div>
+    <div class="content">
+        <h1>Slack Integration</h1>
+        <p>I was asked to add Slack integration. Not very familiar with Slack apps but I used Slack's Slash Commands.</p>
+        <p>Add two Slash commands called /postmb and /setupmb, set the URL to https://l7kjk6dx49.execute-api.us-east-1.amazonaws.com/prod/postedmessage/slack and set the Method to POST.</p>
+        <p>Then use the /setupmb userId:secret command to add as many message boards to your Slack team and allow anyone in your team to use /postmb to post messages to all the configured message boards.</p>
+        <p>Check <a href="https://www.hackster.io/josep-valls/alexa-message-board-324b84">the project's Hackster page</a> for more information.</p>
+    </div>
+
 </body>
 </html>

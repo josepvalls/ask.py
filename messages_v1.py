@@ -690,6 +690,8 @@ class Messages(BaseModel):
             self.secret)
         help += "\nYou can choose to secure your messages but no other identification is required.\nFor more information on how to use the message posting API or use the message posting console, please visit: "
         help += "https://s3.amazonaws.com/aws-website-textconsole-a3cnv/messages.html"
+        help += "\nIf you want to configure your Slack integration, use the following URL for the Slash Command integration: %s\nThen add this message board to your Slack team by typing:\n/setupmb %s:%s" % \
+                ('https://l7kjk6dx49.execute-api.us-east-1.amazonaws.com/prod/postedmessage/slack',self.client_id,self.secret)
         return help
 
 class Message(object):
