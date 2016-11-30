@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 import random, string, hashlib, time, datetime, json
+import urlparse
 
 try:
     import boto3
@@ -105,12 +106,68 @@ def handler_integration_get(event):
 
 
 def handler_integration_post(event):
+    data = urlparse.parse_qs(event.get('body',''))
+    success,message = _handler_integration_post(data)
     return {
         "statusCode": 200,
         "headers": {"Content-Type": "application/json"},
-        "body": "Ok, posted!"
+        "body": message
     }
-
+def _handler_integration_post(data):
+    if not data or not data['command']:
+        return False,'No command'
+    if data['command'][0].strip('/') == 'setupmb':
+        if not data['text'] or not ':' in data['text'][0]:
+            return False,"Use /setupmb userId:secret to configure an Alexa message board for this team."
+        else:
+            client_id,secret = data['text'][0].strip().split(':',1)
+            document = load_document(client_id)
+            model_data = document['model'] if document and 'model' in document else {}
+            model = unserialize(model_data)  # type: Messages
+            if not secret or not secret==model.secret:
+                return False,"Wrong secret"
+            else:
+                source,userids = __get_userids_from_external_messages(data)
+                userids.append(client_id)
+                __persist_userids_to_external_messages(source,list(set(userids)))
+                return True,"Configuration success, use /postmb to post messages to your Alexa message board."
+    elif data['command'][0].strip('/') == 'postmb':
+        source, userids = __get_userids_from_external_messages(data)
+        if not userids:
+            return False,"This team doesn't have any configured Alexa message boards, use /setupmb userId:secret"
+        else:
+            count = 0
+            for i in userids:
+                success,message = __post_external_message(i,data)
+                if success: count += 1
+            return True,"Message Posted!"
+    else:
+        return False,'Bad command'
+def __get_userids_from_external_messages(data):
+    # use this to setup only one channel
+    # source = data['team_id'][0] + ':' + data['channel_id'][0]
+    source = data['team_id'][0]
+    doc = load_document(source,'external_messages_v1')
+    return source,doc.get('userids',[]) if doc else []
+def __persist_userids_to_external_messages(source,userids):
+    persist_document(source,{'userids':userids},'external_messages_v1')
+def __post_external_message(client_id,data):
+    document = load_document(client_id)
+    model_data = document['model'] if document and 'model' in document else {}
+    if not model_data: return False,"No userId"
+    model = unserialize(model_data)  # type: Messages
+    message = Message.from_slack(data)
+    if not message:
+        return False,"No message"
+    for i in xrange(len(model.messages)):
+        if message.key and model.messages[i].key == message.key:
+            model.messages[i] = message
+            break
+    else:
+        model.messages.append(message)
+    document = {'model': model.serialize()}
+    persist_document(client_id, document)
+    return True,"Message posted! (%d messages)" % len(model.messages)
 
 def lambda_handler(event, context):
     #print "EVENT", event
@@ -190,14 +247,15 @@ def log_event(event):
         persist_document('log', log)
 
 
-def check_table():
+def check_table(table_name = None):
+    table_name = table_name or TABLE_NAME
     dynamodb = boto3.resource('dynamodb')
     try:
-        table = dynamodb.Table(TABLE_NAME)
+        table = dynamodb.Table(table_name)
         table.creation_date_time
     except:
         table = dynamodb.create_table(
-            TableName=TABLE_NAME,
+            TableName=table_name,
             KeySchema=[
                 {
                     'AttributeName': 'key',
@@ -216,14 +274,15 @@ def check_table():
                 'WriteCapacityUnits': 5
             }
         )
-        table = dynamodb.Table(TABLE_NAME)
+        table = dynamodb.Table(table_name)
     return table
 
 
-def load_document(key):
+def load_document(key, table_name = None):
+    table_name = table_name or TABLE_NAME
     if boto3 is not None:
         try:
-            table = check_table()
+            table = check_table(table_name)
             response = table.get_item(
                 Key={
                     'key': key,
@@ -238,21 +297,20 @@ def load_document(key):
             print "Exception", e
     return None
 
-
-def persist_document(key, document):
+def persist_document(key, document, table_name = None):
+    table_name = table_name or TABLE_NAME
     if boto3 is not None:
         if not key:
             key = 'empty'
 
         dynamodb = boto3.resource('dynamodb')
-        table = dynamodb.Table(TABLE_NAME)
+        table = dynamodb.Table(table_name)
         table.put_item(
             Item={'key': key, 'document': document}
         )
         return True
     else:
         return False
-
 
 class AlexaResponse(object):
     def __init__(self, title, response, reprompt=None, model=None, ssml=None, card=None):
@@ -266,26 +324,30 @@ class AlexaResponse(object):
     def __str__(self):
         return "%s: %s" % (self.title, self.response)
 
+    def _getResponse(self):
+        return {
+                    "type": "PlainText" if not self.ssml else "SSML",
+                    ("text" if not self.ssml else "ssml"): self.response if not self.ssml else (
+                    "<speak>" + self.ssml + "</speak>")
+        }
+    def _getReprompt(self):
+        return {
+                "type": "PlainText",
+                "text": self.reprompt
+        }
     def toAlexa(self):
         return {
             "version": "1.0",
             "sessionAttributes": {'model': (self.model.serialize() if self.model else {})},
             "response": {
-                "outputSpeech": {
-                    "type": "PlainText" if not self.ssml else "SSML",
-                    ("text" if not self.ssml else "ssml"): self.response if not self.ssml else (
-                    "<speak>" + self.ssml + "</speak>")
-                },
+                "outputSpeech": self._getResponse(),
                 "card": {
                     "type": "Simple",
                     "title": self.title,
                     "content": self.response if not self.card else self.card
                 },
                 "reprompt": {
-                    "outputSpeech": {
-                        "type": "PlainText",
-                        "text": (self.reprompt or self.response)
-                    }
+                    "outputSpeech": self._getReprompt() if self.reprompt else self._getResponse()
                 },
                 "shouldEndSession": ((not self.model.running) if self.model else True)
             }
@@ -439,7 +501,11 @@ class Messages(BaseModel):
         ['purge', 'do_purge', 'do_purge', 'reading'],
         ['purge', 'do_yes', 'do_purge', 'reading'],
         ['purge', 'do_no', 'do_ok', 'reading'],
-        ['reading', 'do_no', 'finish_session', '*']
+        ['reading', 'do_no', 'finish_session', '*'],
+        ['extra_help', 'do_yes', 'do_help', 'reading'],
+        ['extra_help', 'do_no', 'do_ok', 'reading'],
+        ['extra_messages', 'do_yes', 'do_read', 'reading'],
+        ['extra_messages', 'do_no', 'do_ok', 'reading'],
     ]
 
     def get_default_state(self):
@@ -512,13 +578,23 @@ class Messages(BaseModel):
         resp_ssml = resp_card = "Welcome to " + self.model_title + ".\n"
         resp_ssml += self._format_messages(messages, expired, remaining)
         resp_card += self._format_messages(messages, expired, remaining, False, True)
+        reprompt = None
         if not messages:
             resp_ssml = resp_ssml.strip() + " If you need help posting messages try saying: Alexa, ask " + self.model_title + " for help."
+            reprompt = "Do you want help posting messages now?"
+            resp_ssml += " " + reprompt
+            self.state = 'extra_help'
         else:
-            resp_ssml = resp_ssml.strip() + "<break strength=\"strong\"/>Next time, try saying: Alexa, ask " + self.model_title + " to read my messages."
-        self.finish_session()
-        self.state = 'reading'
-        return self.response(self.model_title, resp_ssml, ssml=resp_ssml, card=resp_card)
+            if remaining:
+                resp_ssml = resp_ssml.strip()
+                reprompt = "Do you want me to continue reading posted messages now?"
+                resp_ssml += " " + reprompt
+                self.state = 'extra_messages'
+            else:
+                resp_ssml = resp_ssml.strip() + "<break strength=\"strong\"/>Next time, try saying: Alexa, ask " + self.model_title + " to read my messages."
+                self.finish_session()
+                self.state = 'reading'
+        return self.response(self.model_title, resp_ssml, ssml=resp_ssml, card=resp_card, reprompt=reprompt)
 
     def do_read(self, args=None):
         messages, expired, remaining = self.pop_messages(APP_MAX_ITEMS)
@@ -548,12 +624,13 @@ class Messages(BaseModel):
         return messages, expired, len(messages_keep)
 
     def _format_messages(self, messages, expired=0, remaining=0, ssml=True, card=False):
+        self.offset = 0
         if not messages:
             resp = "There are no messages in your message board."
         else:
             resp = ""
             for i, m in enumerate(messages):
-                resp += self._format_ordinal(i + 1) + " message:\n"
+                resp += self._format_ordinal(i + 1 + self.offset) + " message:\n"
                 if ssml: resp += '<break strength="strong"/>'
                 resp += m.text
                 if ssml: resp += '<break strength="x-strong"/>'
@@ -567,6 +644,7 @@ class Messages(BaseModel):
                         resp += ")"
 
                 resp += '\n'
+            self.offset = i
         if remaining:
             resp += " There %s %s remaining." % (
             'is' if remaining == 1 else 'are', self._format_plural(remaining, 'message', 'messages'))
@@ -637,6 +715,14 @@ class Message(object):
         except:
             pass
         return cls(message_data_)
+    @classmethod
+    def from_slack(cls, message_data={}):
+        try:
+            data = {'text':message_data['text'][0].strip()}
+            return cls(data)
+        except:
+            return None
+
 
     def serialize(self):
         return {'text': self.text, 'sticky': self.sticky, 'expiry': self.expiry, 'key': self.key}
