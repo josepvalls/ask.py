@@ -564,7 +564,7 @@ class Messages(BaseModel):
         return self.do_ok()
 
     def do_purge_confirm(self, args=None):
-        return self.response("Reset", "Are you sure you want to delete your messages?")
+        return self.response("Purge", "Are you sure you want to delete your messages?")
 
     def do_confirm_new(self, args=None):
         return self.response("Reset", "Are you sure you want to reset your secret?")
