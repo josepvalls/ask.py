@@ -18,8 +18,10 @@ ALWAYS_PERSIST = True
 ENVIRONMENT_MODELS = {}
 RELOAD_ENVIRONMENT_MODELS = True
 ALLOWED_APPLICATIONS = [
+    'amzn1.echo-sdk-ams.app.[unique-value-here]',
+    'amzn1.ask.skill.dad8a77a-a627-45a8-ae01-XXX',
     'YOUR_SKILL_ID', # TODO replace with your skill ID
-    'YOUR_TESTING_SKILL_ID' # if you need one for testing
+    'YOUR_TESTING_SKILL_ID' # if you need an additional one for testing
 ]
 
 def lambda_handler(event, context):
@@ -41,8 +43,8 @@ def lambda_handler(event, context):
             event_history = document['event_history'] if document and 'event_history' in document else []
         model = unserialize(model_data)
         if not model:
-            resp = MYMODEL(client_id,None).do_new() # TODO replace MYMODEL with your initial action, maybe a tutorial?
-        else:
+            model = MYMODEL(client_id,None)
+        if True:
             if event['request']['type'] == 'IntentRequest':
                 key = event['request']['type'] + '.' + event['request']['intent']['name']
                 args = event['request']['intent']['slots'] if 'slots' in event['request']['intent'] else {}
@@ -50,14 +52,18 @@ def lambda_handler(event, context):
                 key = event['request']['type']
                 args = {}
             action = model.get_service_translation_layer('alexa').get(key,'do_unknown_command')
-            resp = model.do(action,[args])
-        if resp and resp.model and not resp.model.running or ALWAYS_PERSIST and resp:
+            resp = model.do(action,args,key)
+        if resp and resp.model and not resp.model.running or ALWAYS_PERSIST and resp and resp.model:
             document = {}
             document['model'] = resp.model.serialize()
             persist_document(client_id,document)
-        if resp:
+        if resp and not key == 'SessionEndedRequest':
             log_event(resp.toAlexa())
             return resp.toAlexa()
+        else:
+            return None
+            # https://forums.developer.amazon.com/questions/32359/can-we-emit-a-good-bye-message-in-sessionendedrequ.html
+            # "Your service cannot send back a response to a SessionEndedRequest." The SessionEndedRequest is called when Alexa times out by the web service after which point it no longer accepts responses. As a result it is not possible to provide a goodbye message.
 
 import decimal
 def replace_decimals(obj):
@@ -222,7 +228,7 @@ class BaseModel(object):
         return [BaseModel.TRANSITION_STATE_ANY,BaseModel.TRANSITION_ACTION_ANY,BaseModel.TRANSITION_ACTION_PASSTHROUGH,BaseModel.TRANSITION_OUTPUT_BY_ACTION]
     def get_fst(self):
         return []
-    def do(self, command_name, args):
+    def do(self, command_name, args, intent_key):
         for rule in self.get_fst():
             if (rule[0]==self.state or rule[0]==self.TRANSITION_STATE_ANY) and \
                     (rule[1]==command_name or rule[1]==self.TRANSITION_ACTION_ANY):
@@ -233,12 +239,12 @@ class BaseModel(object):
             command_name = rule[2]
         state_ = self.state
 
+        args['intent_key'] = intent_key
+        args['state'] = self.state
+        args['command_name'] = command_name
+
         func = getattr(self,command_name)
-        if len(args)<func.func_code.co_argcount-1:
-            args += [None]*(func.func_code.co_argcount-len(args)-1)
-        else:
-            args = args[0:func.func_code.co_argcount-1]
-        resp = func(*args)
+        resp = func(args)
 
         if rule[3]==self.TRANSITION_OUTPUT_SAME:
             self.state = state_
@@ -269,9 +275,6 @@ class BaseModel(object):
     def finish_session(self):
         self.stats['completed'] = self.stats.get('completed', 0) + 1
         self.running = False
-        return None
-        # https://forums.developer.amazon.com/questions/32359/can-we-emit-a-good-bye-message-in-sessionendedrequ.html
-        # "Your service cannot send back a response to a SessionEndedRequest." The SessionEndedRequest is called when Alexa times out by the web service after which point it no longer accepts responses. As a result it is not possible to provide a goodbye message.
     def do_new(self):
         self.start_session()
         return self.response("Welcome","Welcome")
@@ -285,6 +288,8 @@ class BaseModel(object):
             return ""
     def do_unknown_command(self):
         return self.response("I'm not sure what you want me to do.", "Sorry, I'm not sure what you want me to do right now." + self.last_reprompt())
+    def do_echo(self, slots = None):
+        return AlexaResponse("Echo",str(slots) if slots else "slots is None")
     def response(self,  title, response, reprompt=None, ssml=None, card=None):
         self._last_reprompt = reprompt or response
         return AlexaResponse(title, response, reprompt=reprompt, model=self, ssml=ssml, card=card)
@@ -296,32 +301,12 @@ class MYMODEL(BaseModel):
     model_title = "Audio Hangman"
     model_description = "Audio Hangman, train your brain!"
 
-    def get_fst():
-        return [
-        ['*', 'finish_session', 'finish_session', '*'],
-        ['confirm_quit', 'do_quit', '*', '*'],
-        ['*', 'do_quit', 'do_confirm_quit', 'confirm_quit'],
-        ['nothing', 'do_new', 'do_new', 'playing'],
-        ['nothing', 'do_resume', 'do_new', 'playing'],
-        ['playing', 'do_new', 'do_confirm_new', 'confirm_new'],
-        ['endgame', '*', 'do_new', 'playing'],
-        ['*', 'do_resume', 'do_resume_long', 'playing'],
-        ['playing', 'do_guess', 'do_guess', '*'],
-        ['playing', 'do_cancel', 'do_quit', '*'],
-        ['confirm_new', 'do_new', 'do_new', 'playing'],
-        ['confirm_new', 'do_yes', 'do_new', 'playing'],
-        ['confirm_new', 'do_no', 'do_resume_short', 'playing'],
-        ['confirm_new', 'do_cancel', 'do_resume_short', 'playing'],
-        ['confirm_quit', 'do_yes', 'do_quit', 'playing'],
-        ['confirm_quit', 'do_no', 'do_resume_short', 'playing'],
-        ['confirm_quit', 'do_cancel', 'do_resume_short', 'playing'],
-        ['confirm_quit', 'do_new', 'do_confirm_new', 'confirm_new'],
-        ['*', 'do_help', 'do_help', '*'],
-    ]
+    def get_fst(self):
+        return []
     def get_default_state(self):
         return 'nothing'
     def get_default_rule(self):
-        return ['*', '*', 'do_unknown_command', '=']
+        return ['*', '*', 'do_echo', '=']
     def get_service_translation_layer(self,service):
         if service == 'alexa':
             return {
@@ -334,7 +319,7 @@ class MYMODEL(BaseModel):
                 'IntentRequest.AMAZON.HelpIntent': 'do_help',
                 'IntentRequest.AMAZON.YesIntent': 'do_yes',
                 'IntentRequest.AMAZON.NoIntent': 'do_no',
-                'SessionEndedRequest': 'finish_session',
+                'SessionEndedRequest': 'do_quit',
             }
 
     def serialize(self):
@@ -347,7 +332,7 @@ class MYMODEL(BaseModel):
     @classmethod
     def unserialize(cls, data):
         self = cls(data['client_id'],None)
-        HM.post_load(self, data)
+        MYMODEL.post_load(self, data)
         return self
     @classmethod
     def post_load(cls,self,data):
@@ -356,9 +341,6 @@ class MYMODEL(BaseModel):
         self.tries = data.get('tries',[])
         self.guesses = data.get('guesses',[])
         self.max_errors = data.get('max_errors',99)
-
-    def finish_session(self):
-        return BaseModel.finish_session(self)
     def get_word(self):
         # TODO compute player skill and get a word based on their skill
         words = 'time,like,know,good,down,never,shall,come,make,work,life'.split(',')
@@ -429,7 +411,7 @@ class MYMODEL(BaseModel):
         title = "Welcome back"
         response = "Welcome back, " + self.text_status_short()
         return self.response(title, response)
-    def do_help(self):
+    def do_help(self, args = None):
         resp = self.text_help()
         return self.response("Help",resp + " Check your Alexa app for more information.", card = resp + " " + self.phonetic_list())
     def do_confirm_quit(self):
@@ -486,4 +468,67 @@ class MYMODEL(BaseModel):
 
 
 if not RELOAD_ENVIRONMENT_MODELS:
-    ENVIRONMENT_MODELS['Hangman'] = HM
+    ENVIRONMENT_MODELS['Hangman'] = MYMODEL
+
+test_event = {
+  "session": {
+    "new": False,
+    "sessionId": "session1234",
+    "attributes": {},
+    "user": {
+      "userId": None
+    },
+    "application": {
+      "applicationId": "amzn1.echo-sdk-ams.app.[unique-value-here]"
+    }
+  },
+  "version": "1.0",
+  "request": {
+    "intent": {
+      "slots": {
+        "Color": {
+          "name": "Color",
+          "value": "blue"
+        }
+      },
+      "name": "MyColorIsIntent"
+    },
+    "type": "IntentRequest",
+    "requestId": "request5678"
+  }
+}
+
+test_event = {
+  "session": {
+    "sessionId": "SessionId.976806f0-337e-44f4-ac7a-XXX",
+    "application": {
+      "applicationId": "amzn1.ask.skill.dad8a77a-a627-45a8-ae01-XXX"
+    },
+    "attributes": {},
+    "user": {
+      "userId": "amzn1.ask.account.XXX"
+    },
+    "new": True
+  },
+  "request": {
+    "type": "IntentRequest",
+    "requestId": "EdwRequestId.6be82751-32f8-4754-9365-XXX",
+    "locale": "en-US",
+    "timestamp": "2016-09-27T23:42:44Z",
+    "intent": {
+      "name": "GetLocalGeneralIntent",
+      "slots": {
+        "Country": {
+          "name": "Country"
+        },
+        "City": {
+          "name": "City",
+          "value": "Barcelona"
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
+
+lambda_handler(test_event,{})
