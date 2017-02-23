@@ -102,7 +102,17 @@ def test_generator():
         'NewIntent (start|start a|start a new|a new|new) (game|board) (| (|of) (|Audio) (battleship|naval battle))',
         # the following are for my Audio Hangman skill
         'NewIntent (start|start a|start a new|a new|new) game (| (|of) (|Audio) hangman',
-        'GuessIntent (|get|give|give me|guess|check) {Letter}'
+        'GuessIntent (|get|give|give me|guess|check) {Letter}',
+        # the following are for my Dark Cave skill
+        'NewIntent (start|start a|start a new|a new|new) game (| (|of) dark cave',
+        'ShootIntent (shoot|fire|launch) (|one|a|the) (|arrow)',
+        'TurnIntent turn {Direction}',
+        'WalkIntent (walk|move|go|step|) (forward|ahead|straight|)',
+        'PickupIntent (grab|pickup|pick up|pick|take|catch|seize|snatch) (|gold|pile|pile of gold|gold pile|arrow)'
+        # the following are for my Easy Hangman skill
+        'NewIntent (start|start a|start a new|a new|new) game (| (|of) (|easy) hangman',
+        'GuessIntent (|get|guess|check) (for the|) (letter|) ({Letter}|((a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z)(.|)) (as in|like) {Letter})',
+        'ClueIntent (give|say|tell) (|me) (|a) (clue|hint)'
     ]
     results = UtteranceGenerator().generate(g, d, verbose=False)
     for i in results:
