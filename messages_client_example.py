@@ -1,9 +1,21 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+# -*- coding: UTF-8 -*-
+
+#
+# This script illustrates how to send messages to the API.
+# Author: "Josep Valls-Vargas" <josep@valls.name>
+# License: MIT
+#
+
 import json
 import subprocess
 import urllib2
 import hashlib
 import datetime
+
+api="https://l7kjk6dx49.execute-api.us-east-1.amazonaws.com/prod/postedmessage"
+secret="..."
+userid="..."
 
 try:
   data = subprocess.check_output(["python","/usr/local/bin/temper-poll"])

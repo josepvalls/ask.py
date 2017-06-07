@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
+
 #
-# "Josep Valls-Vargas" <josep@valls.name>
+# This file contains a minimalistic framework to create Alexa skills.
+# Author: "Josep Valls-Vargas" <josep@valls.name>
+# License: MIT
 #
 
 import random, operator, copy

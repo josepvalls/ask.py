@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
+
 #
-# "Josep Valls-Vargas" <josep@valls.name>
+# This script generates permutations of a given string.
+# Author: "Josep Valls-Vargas" <josep@valls.name>
+# License: MIT
 #
+
 class UtteranceGenerator(object):
     @classmethod
     def generate(cls, grammar, dictionary={}, trim_whitespace=True, verbose=False):
